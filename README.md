@@ -10,6 +10,9 @@ Corporativa do RHGestor (Sólides), https://sistema.rhgestor.com.br:
   > "+ Alunos" > marca cada pessoa pelo nome > "+ Adicionar" > "Confirmar".
 - Mostra no registro todas as mensagens da plataforma e lista quem precisa
   ser resolvido à mão (não encontrado, homônimo, erro).
+- Abre no Outlook o e-mail aos colaboradores adicionados ("treinamentos RH
+  GESTOR - GAP"), com o e-mail da lista do RHGestor ou a regra
+  nome.sobrenome@gapgestao.com.br do FormaSeg.
 
 ## Uso
 

@@ -14,6 +14,7 @@ from pathlib import Path
 URL_BASE = os.environ.get("RHGESTOR_URL", "https://sistema.rhgestor.com.br").rstrip("/")
 URL_UNIVERSIDADE = os.environ.get("RHGESTOR_EAD_URL",
                                   "https://ead.sistema.rhgestor.com.br/TedCorporativo/Index")
+DOMINIO_EMAIL = "gapgestao.com.br"
 TURMA_PADRAO = "Treinamentos Institucionais GAP SSMA"
 INICIO_DA_TURMA = "01/01/1900"
 

@@ -3,14 +3,17 @@ adiciona na turma da Universidade Corporativa."""
 
 from __future__ import annotations
 
+import os
 import queue
+import subprocess
+import sys
 import threading
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import __version__, credenciais
+from . import __version__, credenciais, email_alunos
 from .config import TURMA_PADRAO
 from .entrada import Colaborador, ler_lista
 
@@ -55,6 +58,7 @@ class App(tk.Tk):
         self.minsize(880, 600)
         self.colaboradores: list[Colaborador] = []
         self.situacoes: dict[int, tuple[str, str]] = {}
+        self.emails_plataforma: dict[int, str] = {}
         self.fila: queue.Queue = queue.Queue()
         self.enviando = False
         self.modo_teste = tk.BooleanVar(value=False)
@@ -100,6 +104,9 @@ class App(tk.Tk):
         rodape.pack(fill="x")
         self.btn_adicionar = ttk.Button(rodape, text="Adicionar na turma", command=self.adicionar)
         self.btn_adicionar.pack(side="right")
+        self.btn_email = ttk.Button(rodape, text="Enviar e-mail aos colaboradores", command=self.enviar_email,
+                                    state="disabled")
+        self.btn_email.pack(side="right", padx=(0, 8))
         ttk.Checkbutton(rodape, text="Mostrar navegador", variable=self.mostrar_navegador).pack(side="right", padx=8)
         ttk.Checkbutton(rodape, text="Modo teste (só marca, não adiciona)",
                         variable=self.modo_teste).pack(side="right", padx=8)
@@ -114,6 +121,8 @@ class App(tk.Tk):
     def conferir(self) -> bool:
         self.colaboradores = ler_lista(self.txt.get("1.0", "end"))
         self.situacoes.clear()
+        self.emails_plataforma.clear()
+        self.btn_email.config(state="disabled")
         self.tabela.delete(*self.tabela.get_children())
         for i, c in enumerate(self.colaboradores):
             self.tabela.insert("", "end", iid=str(i), values=(c.nome, c.cpf_formatado, "; ".join(c.avisos)),
@@ -234,7 +243,11 @@ class App(tk.Tk):
         from .plataforma import ErroPlataforma, Plataforma
 
         log = lambda texto: self.fila.put(("log", texto))  # noqa: E731
-        avisar = lambda i, r: self.fila.put(("situacao", i, r.situacao, r.detalhe))  # noqa: E731
+        def avisar(i, r):
+            if r.email:
+                self.fila.put(("email", i, r.email))
+            self.fila.put(("situacao", i, r.situacao, r.detalhe))
+
         try:
             with Plataforma(log=log, visivel=visivel) as p:
                 p.login(usuario, senha)
@@ -272,6 +285,8 @@ class App(tk.Tk):
                     self.log.escrever(dado[0])
                 elif tipo == "situacao":
                     self._situacao(*dado)
+                elif tipo == "email":
+                    self.emails_plataforma[dado[0]] = dado[1]
                 elif tipo == "erro":
                     self.log.escrever(f"ERRO: {dado[0]}")
                     for i, (situacao, _) in list(self.situacoes.items()):
@@ -283,6 +298,8 @@ class App(tk.Tk):
                 elif tipo == "liberar":
                     self.enviando = False
                     self.btn_adicionar.config(state="normal")
+                    if self._cadastrados():
+                        self.btn_email.config(state="normal")
         except queue.Empty:
             pass
         self.after(200, self._processar_fila)
@@ -294,6 +311,61 @@ class App(tk.Tk):
             for linha in pendencias:
                 self.log.escrever("RESOLVER   " + linha.replace("\t", " | "))
         messagebox.showerror("Erro", texto)
+
+    # ---------- e-mail aos colaboradores ----------
+    def _cadastrados(self) -> list[int]:
+        """Quem foi adicionado na turma (no modo teste, quem foi marcado)."""
+        return [i for i, (s, _) in sorted(self.situacoes.items()) if s in ("adicionado", "teste")]
+
+    def enviar_email(self):
+        """Abre um e-mail novo no Outlook (app de e-mail padrão) para os colaboradores adicionados."""
+        indices = self._cadastrados()
+        if not indices:
+            messagebox.showinfo("E-mail aos colaboradores", "Ninguém foi adicionado na turma ainda.")
+            return
+        lista = email_alunos.destinatarios(
+            [(self.colaboradores[i].nome, self.emails_plataforma.get(i, "")) for i in indices])
+        if not lista:
+            return
+        for nome, email, origem in lista:
+            self.log.escrever(f"E-mail de {nome}: {email}"
+                              + (" (o que a lista do RHGestor mostra)" if origem == "plataforma" else " (regra nome.sobrenome)"))
+        enderecos = [e for _, e, _ in lista]
+        link, com_dest, com_corpo = email_alunos.preparar_link(enderecos, email_alunos.ASSUNTO, email_alunos.CORPO)
+        texto_dest = "; ".join(enderecos)
+        try:
+            if sys.platform == "win32":
+                os.startfile(link)  # noqa: S606
+            else:
+                subprocess.Popen(["xdg-open", link])
+        except OSError as erro:
+            self._copiar(texto_dest)
+            messagebox.showerror(
+                "E-mail aos colaboradores",
+                f"Não consegui abrir o app de e-mail ({erro}).\n\n"
+                "Os e-mails foram copiados: cole no campo Para de um e-mail novo.\n\n"
+                "Dica: no Windows, em Configurações > Aplicativos > Aplicativos padrão, "
+                "escolha o Outlook (novo) para o tipo de link MAILTO.")
+            return
+        self.log.escrever(f"E-mail aberto para: {texto_dest}")
+        if not com_dest:
+            self._copiar(texto_dest)
+            messagebox.showinfo("E-mail aos colaboradores",
+                                "São muitos destinatários para caber no link. Os e-mails foram copiados:\n"
+                                "cole no campo Para (ou Cco) do e-mail que abriu.\n\n"
+                                "Clique OK depois de colar para copiar o texto da mensagem.")
+        if not com_corpo:
+            self._copiar(email_alunos.CORPO)
+            messagebox.showinfo("E-mail aos colaboradores",
+                                "O texto da mensagem é grande demais para o link e foi copiado:\n"
+                                "cole no corpo do e-mail (Ctrl+V).")
+        else:
+            self._copiar(texto_dest)
+
+    def _copiar(self, texto: str):
+        self.clipboard_clear()
+        self.clipboard_append(texto)
+        self.update()
 
     def esquecer_login(self):
         credenciais.apagar()

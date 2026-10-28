@@ -35,6 +35,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from .config import INICIO_DA_TURMA, URL_BASE, URL_UNIVERSIDADE, pasta_dados
+from .email_alunos import email_no_texto
 from .entrada import Colaborador
 from .nomes import escolher, mesmo_nome, nome_igual, normalizar, palavras, termos_de_busca
 
@@ -182,8 +183,11 @@ for (const c of caixas) {
         const celulas = [...tr.children];
         let i = cab.findIndex(t => t === 'nome' || t.startsWith('nome ') || t === 'aluno' || t === 'colaborador');
         if (i < 0 || !celulas[i] || !celulas[i].innerText.trim()) i = celulas.findIndex(td => td.innerText.trim());
-        nome = i >= 0 ? celulas[i].innerText.split('\n')[0].trim() : '';
-        resto = celulas.filter((_, j) => j !== i).map(td => td.innerText.replace(/\s+/g, ' ').trim()).filter(t => t).join(' | ');
+        const linhasNome = i >= 0 ? celulas[i].innerText.split('\n').map(t => t.trim()).filter(t => t) : [];
+        nome = linhasNome[0] || '';
+        // cargo, telefone e e-mail ficam na mesma célula do nome, embaixo dele
+        resto = linhasNome.slice(1).concat(celulas.filter((_, j) => j !== i).map(td => td.innerText.replace(/\s+/g, ' ').trim()))
+            .filter(t => t).join(' | ');
     } else {
         const partes = tr.innerText.split('\n').map(t => t.trim()).filter(t => t);
         nome = partes[0] || ''; resto = partes.slice(1).join(' | ');
@@ -320,6 +324,7 @@ class Resultado:
     situacao: str  # adicionado, marcado (modo teste), nao_encontrado, homonimo, sem_confirmacao, erro
     detalhe: str = ""
     nome_na_lista: str = ""
+    email: str = ""  # o e-mail que a lista de alunos mostrou, se mostrou
 
 
 @dataclass
@@ -342,6 +347,7 @@ class Plataforma:
         self.espera = espera
         self.driver: webdriver.Remote | None = None
         self.url_turma = ""
+        self.emails: dict[str, str] = {}  # nome na lista -> e-mail mostrado na lista
 
     # ---------- navegador ----------
     def __enter__(self):
@@ -736,6 +742,7 @@ class Plataforma:
             self.log(f"AVISO: {c.nome}: marquei \"{linha.nome}\" (nome parecido, confira).")
         else:
             self.log(f"Marcado: {linha.nome} ({linha.resto})")
+        self.emails[linha.nome] = email_no_texto(linha.resto)
         lote.pessoas.append((pos, c, linha.nome))
 
     def _enviar_lote(self, lote: _Lote, confirmar: bool, aviso) -> None:
@@ -755,7 +762,7 @@ class Plataforma:
             return
         if not confirmar:
             for pos, c, nome in lote.pessoas:
-                aviso(pos, Resultado("teste", "marcado; não cliquei em Adicionar", nome))
+                aviso(pos, Resultado("teste", "marcado; não cliquei em Adicionar", nome, self.emails.get(nome, "")))
             self.log(f"Modo teste: {len(lote.pessoas)} marcado(s); não cliquei em \"+ Adicionar\".")
             for linha in linhas:  # desmarca, para a lista ficar como estava
                 if linha.marcada and any(nome_igual(linha.nome, n) for _, _, n in lote.pessoas):
@@ -845,13 +852,14 @@ class Plataforma:
         problemas = [m for m in mensagens if _RE_PROBLEMA.search(m) and not ler_processamento(m)]
         for pos, c, nome in lote.pessoas:
             if any(nome_igual(nome, a) or mesmo_nome(a, nome) for a in adicionados):
-                aviso(pos, Resultado("adicionado", "", nome))
+                aviso(pos, Resultado("adicionado", "", nome, self.emails.get(nome, "")))
                 continue
             dele = [m for m in problemas if _cita(m, nome)]
             if dele:
                 aviso(pos, Resultado("erro", " | ".join(dele), nome))
             else:
-                aviso(pos, Resultado("sem_confirmacao", "não vi a mensagem \"adicionado!\"; confira na turma", nome))
+                aviso(pos, Resultado("sem_confirmacao", "não vi a mensagem \"adicionado!\"; confira na turma", nome,
+                                     self.emails.get(nome, "")))
         if processado:
             self.log(f"PLATAFORMA: Processamento concluído {processado[0]} de {processado[1]}")
             if processado[0] < processado[1]:
