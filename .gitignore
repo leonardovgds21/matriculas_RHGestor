@@ -1,0 +1,15 @@
+# Dados pessoais e certificados NUNCA vão para o GitHub
+dados/
+*.pdf
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# PyInstaller (a pasta final fica em executavel/)
+build/
+dist/
+*.spec

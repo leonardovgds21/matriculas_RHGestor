@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<title>RHGestor (simulado)</title>
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  .banner { float: left; width: 45%; height: 100vh; background: #2b6cb0; color: #fff; padding: 20px; box-sizing: border-box; }
+  .login { margin-left: 50%; padding: 60px 20px; }
+  .menu { float: left; width: 220px; background: #eee; min-height: 100vh; }
+  .menu a { display: block; padding: 8px; cursor: pointer; }
+  .menu ul { display: none; margin: 0; padding-left: 14px; }
+  .menu ul.aberto { display: block; }
+  #conteudo { margin-left: 230px; padding: 10px; }
+  .topo { display: flex; justify-content: space-between; align-items: center; }
+  .card-turma { display: inline-block; width: 230px; height: 90px; margin: 10px; padding: 8px; background: #e2e8f0; cursor: pointer; vertical-align: top; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.3); }
+  .modal-content { background: #fff; margin: 30px auto; width: 900px; padding: 10px; max-height: 85vh; overflow: auto; }
+  .confirmacao { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; }
+  .confirmacao > div { background: #fff; margin: 160px auto; width: 420px; padding: 16px; }
+  #toast-container { position: fixed; top: 10px; right: 10px; z-index: 99; }
+  .toast { background: #38a169; color: #fff; padding: 8px 12px; margin-bottom: 6px; }
+  .toast-error { background: #c53030; }
+  table { border-collapse: collapse; } td, th { border: 1px solid #ccc; padding: 4px; }
+  .blockUI { position: fixed; inset: 0; background: rgba(255,255,255,.5); z-index: 40; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast-container"></div>
+<script>
+// Imita as telas do RHGestor usadas pelo app (mesmos rótulos, botões e mensagens).
+// localStorage 'tamPagina' muda o tamanho da página da lista de alunos (padrão: todos).
+const LOGIN = 'gestor', SENHA = 'teste';
+const TURMAS = [
+  {id: 1, nome: 'Onboarding Bayer', inicio: '2025-03-01'},
+  {id: 2, nome: 'Treinamentos Institucionais GAP SSMA', inicio: '2024-05-10'},
+];
+const COLABORADORES = [
+  ['JOÃO DA SILVA PEREIRA', 'Técnico de Segurança', 'joao@gap.com', 'Matriz'],
+  ['MARCOS PAULO SOUZA', 'Operador', 'marcos1@gap.com', 'Obra A'],
+  ['MARCOS PAULO DE SOUZA', 'Ajudante', 'marcos2@gap.com', 'Obra B'],
+  ['ANA PAULA ERRO TESTE', 'Auxiliar', '', 'Matriz'],
+  ['BEATRIZ LIMA', 'Analista', 'bia@gap.com', 'Matriz'],
+  ['BRUNO MATIAS DE OLIVEIRA', 'Motorista', 'bruno@gap.com', 'Obra A'],
+  ['CARLA MENDES ROCHA', 'Engenheira', 'carla@gap.com', 'Obra C'],
+  ['DANIEL ALVES', 'Eletricista', 'daniel@gap.com', 'Obra C'],
+  ['EDUARDO NUNES', 'Pedreiro', 'edu@gap.com', 'Obra B'],
+  ['FERNANDA COSTA', 'Administrativo', 'fe@gap.com', 'Matriz'],
+];
+const app = document.getElementById('app');
+const norm = t => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const espera = ms => new Promise(r => setTimeout(r, ms));
+const turmaAlunos = () => JSON.parse(localStorage.getItem('turma2') || '[]');
+const caminho = location.pathname.toLowerCase();
+
+function carregando(sim) {
+  let b = document.querySelector('.blockUI');
+  if (sim && !b) { b = document.createElement('div'); b.className = 'blockUI'; document.body.appendChild(b); }
+  if (!sim && b) b.remove();
+}
+function toast(texto, erro) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (erro ? ' toast-error' : '');
+  t.innerHTML = `<div class="toast-message">${texto}</div>`;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 1500);
+}
+function menu() {
+  return `<div class="menu">
+    <a href="/Home">Início</a>
+    <a id="mTed" onclick="document.getElementById('subTed').classList.toggle('aberto')"><i class="fa fa-graduation-cap"></i> Treinamentos (T&amp;D)</a>
+    <ul id="subTed">
+      <li><a href="/Ted/Gerenciador">Gerenciador de Treinamento</a></li>
+      <li><a href="/TedCorporativa/Index">Universidade Corporativa</a></li>
+      <li><a href="/Ted/Certificados">Certificados Disponíveis</a></li>
+    </ul>
+    <a href="/Ponto">Ponto</a>
+  </div>`;
+}
+
+if (caminho.startsWith('/login') || caminho === '/') {
+  app.innerHTML = `<div class="banner"><h1>Sólides RHGestor</h1><p>Banner de novidades</p></div>
+    <div class="login"><form id="f">
+      <label for="Login">Login</label><br><input id="Login" name="Login" type="text"><br><br>
+      <label for="Senha">Senha</label><br><input id="Senha" name="Senha" type="password"><br><br>
+      <button type="submit" class="btn btn-primary">Acessar</button>
+      <div id="msg"></div>
+    </form></div>`;
+  document.getElementById('f').onsubmit = async e => {
+    e.preventDefault();
+    carregando(true); await espera(600); carregando(false);
+    if (document.getElementById('Login').value === LOGIN && document.getElementById('Senha').value === SENHA) {
+      localStorage.setItem('logado', '1'); location.href = '/Home';
+    } else {
+      document.getElementById('msg').innerHTML = '<div class="alert alert-danger">Usuário ou senha inválidos.</div>';
+    }
+  };
+} else if (localStorage.getItem('logado') !== '1') {
+  location.href = '/login';
+} else if (caminho.startsWith('/tedcorporativa/index')) {
+  app.innerHTML = menu() + `<div id="conteudo">
+    <div class="topo"><h2>Universidade Corporativa</h2>
+      <a href="#" id="atualizar" title="Atualizar janela / pesquisar"><i class="fa fa-refresh"></i>&#8635;</a></div>
+    <div><span>Início da turma</span> <input type="date" id="dtInicio" value="2026-01-01"></div>
+    <div id="cards"></div></div>`;
+  document.getElementById('atualizar').onclick = async e => {
+    e.preventDefault();
+    carregando(true); await espera(700); carregando(false);
+    const de = document.getElementById('dtInicio').value || '9999-12-31';
+    document.getElementById('cards').innerHTML = TURMAS.filter(t => t.inicio >= de).map(t =>
+      `<div class="card-turma" onclick="location.href='/TedCorporativa/Turma?id=${t.id}'">
+         <img alt=""><div class="titulo">${t.nome}</div><small>Início: ${t.inicio}</small></div>`).join('')
+      || '<p>Nenhuma turma encontrada.</p>';
+  };
+} else if (caminho.startsWith('/tedcorporativa/turma')) {
+  const turma = TURMAS.find(t => String(t.id) === new URLSearchParams(location.search).get('id'));
+  app.innerHTML = menu() + `<div id="conteudo">
+    <div class="topo"><h2>Turma - Universidade Corporativa</h2>
+      <button class="btn btn-success" id="maisAlunos"><i class="fa fa-plus"></i> Alunos</button></div>
+    <h3>${turma.nome}</h3>
+    <table><thead><tr><th>Aluno</th></tr></thead><tbody>${turmaAlunos().map(n => `<tr><td>${n}</td></tr>`).join('')}</tbody></table>
+    </div>`;
+  document.getElementById('maisAlunos').onclick = abrirPesquisa;
+} else {
+  app.innerHTML = menu() + '<div id="conteudo"><h2>Bem-vindo</h2></div>';
+}
+
+let busca = '';
+function abrirPesquisa() {
+  const m = document.createElement('div');
+  m.className = 'modal'; m.id = 'modalAlunos'; m.setAttribute('role', 'dialog');
+  m.innerHTML = `<div class="modal-content"><h3>Pesquisar Alunos</h3>
+    <div style="display:flex;justify-content:space-between">
+      <div><input id="busca" placeholder="Busca por Nome"> <button id="pesq">Pesquisar</button> <button id="todos">Todos</button></div>
+      <button id="adicionar"><i class="fa fa-plus"></i> Adicionar</button></div>
+    <div id="lista"></div></div>`;
+  document.body.appendChild(m);
+  busca = '';
+  document.getElementById('pesq').onclick = async () => {
+    busca = document.getElementById('busca').value;
+    carregando(true); await espera(500); carregando(false);
+    lista();  // recria a lista: as marcações somem (o pior caso)
+  };
+  document.getElementById('todos').onclick = () => { throw new Error('O app nunca deve clicar em Todos'); };
+  document.getElementById('adicionar').onclick = adicionar;
+  lista();
+}
+function lista() {
+  const tam = +(localStorage.getItem('tamPagina') || 1000);
+  const disponiveis = COLABORADORES.filter(c => !turmaAlunos().includes(c[0]))
+    .filter(c => !busca || norm(c[0]).includes(norm(busca)));
+  const pagina = disponiveis.slice(0, tam);
+  document.getElementById('lista').innerHTML = `<table><thead><tr><th><input type="checkbox" id="marcarTodos"></th>
+    <th>Nome</th><th>Cargo</th><th>E-mail</th><th>Lotação</th></tr></thead><tbody>
+    ${pagina.map(c => `<tr><td><input type="checkbox" value="${c[0]}"></td><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td>${c[3]}</td></tr>`).join('')}
+    </tbody></table><p>Exibindo itens ${pagina.length ? 1 : 0} - ${pagina.length} de ${disponiveis.length}</p>`;
+}
+function adicionar() {
+  const marcados = [...document.querySelectorAll('#lista tbody input:checked')].map(c => c.value);
+  if (!marcados.length) { toast('Selecione ao menos um aluno.', true); return; }
+  const c = document.createElement('div');
+  c.className = 'confirmacao';
+  c.innerHTML = `<div><p>Você confirma adicionar todos os alunos selecionados?</p>
+    <button id="cancelar">Cancelar</button> <button id="confirmar">Confirmar</button></div>`;
+  document.body.appendChild(c);
+  document.getElementById('cancelar').onclick = () => c.remove();
+  document.getElementById('confirmar').onclick = async () => {
+    c.remove();
+    const p = document.createElement('div');
+    p.className = 'modal'; p.id = 'processando';
+    p.innerHTML = `<div class="modal-content" style="width:400px"><div class="modal-body"><h4>Aguarde, adicionando alunos</h4>
+      <p id="progresso">0 de ${marcados.length}</p></div></div>`;
+    document.body.appendChild(p);
+    let ok = 0;
+    for (const nome of marcados) {
+      await espera(400);
+      if (nome.includes('ERRO')) toast(`Erro ao adicionar ${nome}: aluno sem e-mail cadastrado.`, true);
+      else { ok++; localStorage.setItem('turma2', JSON.stringify([...turmaAlunos(), nome])); toast(`${nome} adicionado!`); }
+      document.getElementById('progresso').textContent = `${ok} de ${marcados.length}`;
+    }
+    p.querySelector('.modal-body').innerHTML = `<h4>Processamento concluído</h4><p>Processamento concluído  ${ok} de ${marcados.length}</p>
+      <button id="ok">OK</button>`;
+    document.getElementById('ok').onclick = () => { p.remove(); document.getElementById('modalAlunos').remove(); location.reload(); };
+  };
+}
+</script>
+</body>
+</html>
