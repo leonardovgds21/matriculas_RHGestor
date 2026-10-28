@@ -287,6 +287,56 @@ return /just a moment|um momento|attention required/.test(titulo)
     || !!document.querySelector('iframe[src*="challenges.cloudflare.com"], #challenge-form, #challenge-running, #cf-challenge-running');
 """
 
+# A pesquisa de avaliação (NPS da Track.co) aberta: ["iframe", frame] ou
+# ["botao", X], ou null. O X é procurado só em volta do texto da pesquisa.
+_JS_PESQUISA = _JS_NORM + r"""
+const frames = [...document.querySelectorAll('iframe')].filter(f => vis(f) &&
+    /track\.co|tracksale|trackco|nps|survey|pesquisa/i.test([f.src, f.id, f.name, f.className, f.title].join(' ')));
+if (frames.length) return ['iframe', frames[0]];
+const ehPesquisa = t => /recomendaria|escala de 0 a 10|track co/.test(t);
+const blocos = [...document.querySelectorAll('body *')].filter(e => vis(e) && ehPesquisa(letras(e.innerText || '')));
+const internos = blocos.filter(e => !blocos.some(o => o !== e && e.contains(o)));
+const ehX = e => vis(e) && (/^[x×✕✖]$/i.test((e.innerText || e.textContent || '').trim()) ||
+    /(^|[\s_-])(close|fechar|dismiss)/i.test([typeof e.className === 'string' ? e.className : '',
+        e.getAttribute('aria-label') || '', e.title || ''].join(' ')));
+for (const b of internos) {
+    let el = b;
+    for (let i = 0; i < 6 && el && el !== document.body; i++, el = el.parentElement) {
+        const x = [...el.querySelectorAll('button, a, span, i, svg, div, [role=button]')].find(ehX);
+        if (x) return ['botao', x.closest('button, a, [role=button]') || x];
+    }
+}
+return null;
+"""
+
+# O X dentro do iframe da pesquisa.
+_JS_X_NO_FRAME = _JS_NORM + r"""
+const ehX = e => vis(e) && (/^[x×✕✖]$/i.test((e.innerText || e.textContent || '').trim()) ||
+    /(^|[\s_-])(close|fechar|dismiss)/i.test([typeof e.className === 'string' ? e.className : '',
+        e.getAttribute('aria-label') || '', e.title || ''].join(' ')));
+const x = [...document.querySelectorAll('button, a, span, i, svg, div, [role=button]')].find(ehX);
+return x ? (x.closest('button, a, [role=button]') || x) : null;
+"""
+
+# Um X logo fora do iframe (no mesmo bloco que o envolve).
+_JS_X_PERTO = _JS_NORM + r"""
+let el = arguments[0].parentElement;
+for (let i = 0; i < 3 && el && el !== document.body; i++, el = el.parentElement) {
+    const x = [...el.querySelectorAll('button, a, span, i, [role=button]')].find(e => vis(e) &&
+        (/^[x×✕✖]$/i.test((e.innerText || '').trim()) || /close|fechar/i.test((e.className || '') + (e.getAttribute('aria-label') || ''))));
+    if (x) return x;
+}
+return null;
+"""
+
+_JS_ESCONDER_PESQUISA = r"""
+for (const f of document.querySelectorAll('iframe')) {
+    if (/track\.co|tracksale|trackco|nps|survey|pesquisa/i.test([f.src, f.id, f.name, f.className, f.title].join(' '))) {
+        (f.closest('[style*=fixed], [class*=modal], [class*=overlay], [class*=track]') || f).style.display = 'none';
+    }
+}
+"""
+
 # Mensagens de "carregando" na frente da tela.
 _JS_CARREGANDO = _JS_NORM + r"""
 return [...document.querySelectorAll('.blockUI, .loading, .loader, .spinner, .spinner-border, .k-loading-mask, ' +
@@ -543,6 +593,7 @@ class Plataforma:
             raise self._erro(f"Login recusado: {resultado[1]}", "login")
         self._esperar_carregar()
         self.log("Login feito.")
+        self.fechar_popups(espera=8)
 
     def _abrir_login(self):
         """Abre o login e devolve o campo Senha. Se o site mostrar a verificação
@@ -598,6 +649,55 @@ class Plataforma:
         except WebDriverException:
             return False
 
+    def fechar_popups(self, espera: float = 0) -> None:
+        """Fecha a pesquisa de avaliação (NPS da Track.co: "recomendaria a RHGestor...")
+        clicando no X. Pode aparecer logo depois do login ou mais tarde; se não
+        estiver na tela, não faz nada. `espera` dá um tempo para ela surgir."""
+        d = self.driver
+        fim = time.time() + espera
+        while True:
+            try:
+                achado = d.execute_script(_JS_PESQUISA)
+            except WebDriverException:
+                achado = None
+            if achado or time.time() >= fim:
+                break
+            time.sleep(0.5)
+        if not achado:
+            return
+        tipo, elemento = achado
+        fechou = False
+        try:
+            if tipo == "botao":
+                self._clicar(elemento)
+            else:  # a pesquisa está dentro de um iframe: o X fica lá dentro (ou logo fora dele)
+                d.switch_to.frame(elemento)
+                try:
+                    x = d.execute_script(_JS_X_NO_FRAME)
+                    if x:
+                        self._clicar(x)
+                        fechou = True
+                finally:
+                    d.switch_to.default_content()
+                if not fechou:
+                    x = d.execute_script(_JS_X_PERTO, elemento)
+                    if x:
+                        self._clicar(x)
+            time.sleep(0.8)
+            if d.execute_script(_JS_PESQUISA):
+                # o X não fechou: esconde a pesquisa para ela não ficar na frente dos cliques
+                d.execute_script(_JS_ESCONDER_PESQUISA)
+                self.log("A pesquisa de avaliação não fechou pelo X; escondi para continuar.")
+            else:
+                self.log("Fechei a pesquisa de avaliação do RHGestor.")
+        except WebDriverException as erro:
+            try:
+                d.switch_to.default_content()
+                d.execute_script(_JS_ESCONDER_PESQUISA)
+            except WebDriverException:
+                pass
+            self.log(f"AVISO: não consegui fechar a pesquisa de avaliação ({type(erro).__name__}); escondi e segui.")
+
     def _campo_texto_visivel(self):
         for seletor in ("input[name*='login' i]", "input[id*='login' i]", "input[type='email']", "input[type='text']"):
             for campo in self.driver.find_elements(By.CSS_SELECTOR, seletor):
@@ -609,6 +709,7 @@ class Plataforma:
     def abrir_universidade(self) -> None:
         """Menu Treinamentos (T&D) > Universidade Corporativa (abre na mesma aba ou numa nova)."""
         d = self.driver
+        self.fechar_popups()
         self.log("Abrindo Treinamentos (T&D) > Universidade Corporativa...")
         menu = None
         for texto in ("treinamentos t d", "treinamentos"):
@@ -646,6 +747,7 @@ class Plataforma:
     def filtrar_turmas(self) -> None:
         """Início da turma = 01/01/1900 e clica no botão de atualizar/pesquisar."""
         d = self.driver
+        self.fechar_popups()
         campo = d.execute_script(_JS_CAMPO_DO_ROTULO, "inicio da turma")
         if (campo.get_attribute("type") or "").lower() != "date":
             atual = campo.get_attribute("value") or ""
@@ -670,6 +772,7 @@ class Plataforma:
         alvo = _letras(turma)
         achado = self._esperar(lambda drv: drv.execute_script(_JS_CARD_TURMA, alvo), 30,
                                f'o card da turma "{turma}" (depois de filtrar o Início da turma)')
+        self.fechar_popups()
         card, quantos = achado
         if quantos > 1:
             self.log(f'AVISO: há {quantos} cards com o nome "{turma}"; abrindo o primeiro.')
@@ -688,6 +791,7 @@ class Plataforma:
         janela = d.execute_script(_JS_JANELA_ALUNOS)
         if janela or not abrir:
             return janela
+        self.fechar_popups()
         botao = self._esperar(lambda drv: self._botao("alunos", so_igual=True), 30, 'o botão "+ Alunos"')
         self._clicar(botao)
         janela = self._esperar(lambda drv: drv.execute_script(_JS_JANELA_ALUNOS), 30,
