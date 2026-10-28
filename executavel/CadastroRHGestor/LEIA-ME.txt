@@ -1,0 +1,50 @@
+CADASTRO RHGESTOR
+=================
+
+Inclui colaboradores na turma de treinamento da Universidade Corporativa do
+RHGestor (Sólides). Turma padrão: "Treinamentos Institucionais GAP SSMA".
+
+Como usar
+1. Abra CadastroRHGestor.exe.
+2. Na caixa de cima, digite ou cole os colaboradores, um por linha, com
+   nome completo e CPF em qualquer ordem. Exemplos:
+       529.982.247-25 Maria da Silva
+       João Pereira;11144477735
+   Também dá para colar duas colunas do Excel (Nome e CPF). O CPF pode
+   faltar: a busca na turma é pelo nome.
+   Ou clique em "Abrir fichas (PDF)..." e escolha uma ou várias fichas
+   (Ficha de Registro de Empregado, a mesma do FormaSeg e do Imbraep, ou
+   fichas de EPI). O app lê só o CPF e o nome e põe na caixa de texto, onde
+   dá para conferir e corrigir.
+3. Clique em "Conferir lista". A coluna Situação mostra problemas como CPF
+   inválido, nome incompleto ou repetido; essas linhas são puladas.
+4. Confira o nome da turma e clique em "Adicionar na turma". Informe o
+   login do RHGestor (Login e Senha). O app:
+   - entra em Treinamentos (T&D) > Universidade Corporativa;
+   - põe 01/01/1900 em "Início da turma" e atualiza;
+   - abre o card da turma e clica em "+ Alunos";
+   - marca cada pessoa na lista "Pesquisar Alunos" pelo nome (sem acento,
+     maiúsculas e "da/de/dos"); nunca usa o botão "Todos";
+   - clica em "+ Adicionar" e "Confirmar".
+   Quem não aparece na lista que abre é procurado pela "Busca por Nome" e
+   adicionado sozinho.
+   - "Modo teste" faz tudo, mas só marca: não clica em "+ Adicionar".
+   - "Mostrar navegador" deixa ver o que está acontecendo.
+5. O registro embaixo mostra TODAS as mensagens da plataforma (em azul),
+   como "NOME adicionado!" e "Processamento concluído N de M". No fim vem a
+   lista "RESOLVER À MÃO" com quem:
+   - não foi encontrado na lista (já está na turma ou não é colaborador);
+   - tem homônimos (duas pessoas com o mesmo nome: o app não marca);
+   - deu erro ou não teve a mensagem "adicionado!".
+   "Copiar pendências" copia essa lista para colar no Excel ou no e-mail.
+   Quando o app marca um nome parecido (ex.: com nome do meio a mais), ele
+   avisa no registro para você conferir.
+
+Se der erro
+- O app salva um print e um resumo da página em dados\erros (pasta ao
+  lado do .exe). Mande o .png e o .txt para ajustar.
+
+Para usar em outro computador, copie a pasta CadastroRHGestor inteira.
+Precisa do Microsoft Edge (já vem no Windows) e de internet.
+O login só é salvo se você marcar "Lembrar", e fica no Cofre de
+Credenciais do Windows daquele computador.

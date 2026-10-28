@@ -1,0 +1,1 @@
+Prints das telas reais do RHGestor (referência para a automação).
