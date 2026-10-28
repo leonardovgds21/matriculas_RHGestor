@@ -2,6 +2,7 @@
 
     python tests/site_simulado/e2e.py            (navegador invisível)
     python tests/site_simulado/e2e.py --mostrar  (vendo o navegador)
+    python tests/site_simulado/e2e.py --desafio  (com a verificação de segurança no login)
 """
 
 from __future__ import annotations
@@ -14,9 +15,10 @@ RAIZ = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(RAIZ / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from servidor import iniciar  # noqa: E402
+import servidor as site  # noqa: E402
 
-servidor, URL = iniciar()
+site.com_desafio = "--desafio" in sys.argv  # verificação de segurança no login (abre o navegador visível)
+servidor, URL = site.iniciar()
 os.environ["RHGESTOR_URL"] = URL
 os.environ["RHGESTOR_EAD_URL"] = URL + "/TedCorporativo/Index"
 
