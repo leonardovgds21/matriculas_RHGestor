@@ -58,8 +58,9 @@ with Plataforma(log=log, visivel="--mostrar" in sys.argv, espera=15) as p:
         confere("login errado recusado", str(erro).startswith("Login recusado"), True)
 
     p.login("gestor", "teste")
-    p.driver.execute_script("localStorage.clear(); localStorage.setItem('logado', '1');")
+    p.driver.execute_script("for (const k of ['turma2', 'tamPagina', 'erro']) localStorage.removeItem(k);")
     p.abrir_turma(TURMA)
+    confere("fechou a pesquisa de avaliação pelo X", p.driver.execute_script("return localStorage.getItem('pesquisaFechada')"), "1")
     confere("abriu a turma certa", "id=2" in p.driver.current_url, True)
 
     r = rodar(p, "Joao Silva Pereira 529.982.247-25\nBeatriz Lima", confirmar=False)

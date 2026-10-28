@@ -151,8 +151,27 @@ if (caminho.startsWith('/login') || caminho === '/') {
   document.getElementById('todos').onclick = () => localStorage.setItem('erro', 'todos');
   document.getElementById('adicionar').onclick = adicionar;
   lista();
+} else if (caminho.startsWith('/trackco')) {
+  // conteúdo do iframe da pesquisa de avaliação (Track.co)
+  app.innerHTML = `<div style="position:relative;padding:20px"><button id="x" style="position:absolute;top:4px;right:4px">x</button>
+    <p>LEONARDO, tudo bem?</p><p>Em uma escala de 0 a 10, o quanto você recomendaria a RHGestor by Sólides?</p>
+    ${[...Array(11).keys()].map(n => `<button>${n}</button>`).join(' ')}<p>TRACK.CO</p></div>`;
+  document.getElementById('x').onclick = () => parent.postMessage('fecharPesquisa', '*');
 } else {
   app.innerHTML = menu() + '<div id="conteudo"><h2>Bem-vindo</h2></div>';
+}
+if (caminho.startsWith('/home') && !sessionStorage.getItem('pesquisaMostrada')) {
+  sessionStorage.setItem('pesquisaMostrada', '1');
+  setTimeout(() => {
+    const f = document.createElement('div');
+    f.id = 'trackco-widget';
+    f.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:60';
+    f.innerHTML = '<iframe src="/trackco/survey" title="Pesquisa" style="background:#fff;width:600px;height:300px;margin:120px auto;display:block;border:0"></iframe>';
+    document.body.appendChild(f);
+    window.addEventListener('message', e => {
+      if (e.data === 'fecharPesquisa') { f.remove(); localStorage.setItem('pesquisaFechada', '1'); }
+    });
+  }, 1500);
 }
 
 var busca = '';
