@@ -18,7 +18,7 @@ from servidor import iniciar  # noqa: E402
 
 servidor, URL = iniciar()
 os.environ["RHGESTOR_URL"] = URL
-os.environ["RHGESTOR_EAD_URL"] = URL + "/TedCorporativa/Index"
+os.environ["RHGESTOR_EAD_URL"] = URL + "/TedCorporativo/Index"
 
 from cadastro_rhgestor.entrada import ler_lista  # noqa: E402
 from cadastro_rhgestor.plataforma import ErroPlataforma, Plataforma  # noqa: E402
@@ -56,9 +56,9 @@ with Plataforma(log=log, visivel="--mostrar" in sys.argv, espera=15) as p:
         confere("login errado recusado", str(erro).startswith("Login recusado"), True)
 
     p.login("gestor", "teste")
-    p.driver.execute_script("localStorage.removeItem('turma2'); localStorage.removeItem('tamPagina');")
+    p.driver.execute_script("localStorage.clear(); localStorage.setItem('logado', '1');")
     p.abrir_turma(TURMA)
-    confere("abriu a turma certa", "Turma=" in p.driver.current_url or "id=2" in p.driver.current_url, True)
+    confere("abriu a turma certa", "id=2" in p.driver.current_url, True)
 
     r = rodar(p, "Joao Silva Pereira 529.982.247-25\nBeatriz Lima", confirmar=False)
     confere("modo teste", r, {"Joao Silva Pereira": "teste", "Beatriz Lima": "teste"})
@@ -87,6 +87,9 @@ Beatriz Lima 111.444.777-35""", confirmar=True)
     confere("turma no fim", sorted(p.driver.execute_script("return JSON.parse(localStorage.getItem('turma2'))")),
             ["BEATRIZ LIMA", "BRUNO MATIAS DE OLIVEIRA", "CARLA MENDES ROCHA", "FERNANDA COSTA",
              "JOÃO DA SILVA PEREIRA"])
+
+    confere("nunca clicou em Todos, Gravar, duplicar ou nova turma",
+            p.driver.execute_script("return localStorage.getItem('erro')"), None)
 
 servidor.shutdown()
 print("TUDO CERTO" if not falhas else f"{len(falhas)} FALHA(S): {', '.join(falhas)}")
