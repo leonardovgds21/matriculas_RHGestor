@@ -72,7 +72,7 @@ function menu() {
     <a id="mTed" onclick="document.getElementById('subTed').classList.toggle('aberto')"><i class="fa fa-graduation-cap"></i> Treinamentos (T&amp;D)</a>
     <ul id="subTed">
       <li><a href="/Ted/Gerenciador">Gerenciador de Treinamento</a></li>
-      <li><a href="/TedCorporativa/Index">Universidade Corporativa</a></li>
+      <li><a href="/TedCorporativo/Index">Universidade Corporativa</a></li>
       <li><a href="/Ted/Certificados">Certificados Disponíveis</a></li>
     </ul>
     <a href="/Ponto">Ponto</a>
@@ -98,80 +98,94 @@ if (caminho.startsWith('/login') || caminho === '/') {
   };
 } else if (localStorage.getItem('logado') !== '1') {
   location.href = '/login';
-} else if (caminho.startsWith('/tedcorporativa/index')) {
+} else if (caminho.startsWith('/tedcorporativo/index')) {
   app.innerHTML = menu() + `<div id="conteudo">
-    <div class="topo"><h2>Universidade Corporativa</h2>
-      <a href="#" id="atualizar" title="Atualizar janela / pesquisar"><i class="fa fa-refresh"></i>&#8635;</a></div>
-    <div><span>Início da turma</span> <input type="date" id="dtInicio" value="2026-01-01"></div>
-    <div id="cards"></div></div>`;
-  document.getElementById('atualizar').onclick = async e => {
-    e.preventDefault();
+    <div class="topo"><span>Dashboard &gt; Universidade Corporativa</span>
+      <div><button class="btn btn-primary" title="Nova turma" onclick="localStorage.setItem('erro','novaTurma')">+</button>
+      <button class="btn" id="atualizar" data-original-title="Atualizar janela / pesquisar"><i class="fa fa-refresh"></i></button></div></div>
+    <h4>Filtros</h4>
+    <div class="row"><div class="col"><label>Busca por Turma</label><input placeholder="Digite o texto a ser pesquisado"></div>
+      <div class="col"><label>Início da turma</label><span class="k-datepicker"><input id="dtInicio" data-role="datepicker" value="28-10-2025"></span></div>
+      <div class="col"><label>Término da turma</label><input id="dtFim" value="28-10-2027"></div></div>
+    <h3>Universidade Corporativa</h3><div id="cards"></div><div class="k-pager-info">Sem itens para exibir</div></div>`;
+  const ymd = v => { const m = v.match(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : '9999-12-31'; };
+  document.getElementById('atualizar').onclick = async () => {
     carregando(true); await espera(700); carregando(false);
-    const de = document.getElementById('dtInicio').value || '9999-12-31';
-    document.getElementById('cards').innerHTML = TURMAS.filter(t => t.inicio >= de).map(t =>
-      `<div class="card-turma" onclick="location.href='/TedCorporativa/Turma?id=${t.id}'">
-         <img alt=""><div class="titulo">${t.nome}</div><small>Início: ${t.inicio}</small></div>`).join('')
-      || '<p>Nenhuma turma encontrada.</p>';
+    const de = ymd(document.getElementById('dtInicio').value);
+    const lista = TURMAS.filter(t => t.inicio >= de);
+    document.getElementById('cards').innerHTML = lista.map(t =>
+      `<div class="card-turma"><div class="titulo" onclick="location.href='/TedCorporativo/Turma?id=${t.id}'">${t.nome}
+         <a class="copiar" title="Duplicar turma" onclick="event.stopPropagation(); localStorage.setItem('erro','duplicou')">&#10697;</a></div>
+         <small>${t.inicio}</small></div>`).join('');
+    document.querySelector('.k-pager-info').textContent = lista.length ? `Exibindo itens 1 - ${lista.length} de ${lista.length}` : 'Sem itens para exibir';
   };
-} else if (caminho.startsWith('/tedcorporativa/turma')) {
+} else if (caminho.startsWith('/tedcorporativo/turma')) {
   const turma = TURMAS.find(t => String(t.id) === new URLSearchParams(location.search).get('id'));
   app.innerHTML = menu() + `<div id="conteudo">
-    <div class="topo"><h2>Turma - Universidade Corporativa</h2>
-      <button class="btn btn-success" id="maisAlunos"><i class="fa fa-plus"></i> Alunos</button></div>
-    <h3>${turma.nome}</h3>
-    <table><thead><tr><th>Aluno</th></tr></thead><tbody>${turmaAlunos().map(n => `<tr><td>${n}</td></tr>`).join('')}</tbody></table>
+    <div class="topo"><span>Turmas - Universidade Corporativa</span>
+      <div><button onclick="localStorage.setItem('erro','gravar')">Gravar</button> <button>Cancelar</button></div></div>
+    <h2>Turma - Universidade Corporativa</h2>
+    <label>Turma</label> <input value="${turma.nome}">
+    <div><a href="/TedCorporativo/PesquisaAlunos/?e=${turma.id}" class="btn-alunos"><i class="fa fa-plus"></i> Alunos</a>
+         <a href="#">+ Cursos/Treinamentos</a></div>
+    <table><thead><tr><th>#</th><th>Nome</th><th>% Concluído</th></tr></thead><tbody>${turmaAlunos().map((n, i) => `<tr><td>${i + 1}</td><td>${n}</td><td>0,00%</td></tr>`).join('')}</tbody></table>
     </div>`;
-  document.getElementById('maisAlunos').onclick = abrirPesquisa;
-} else {
-  app.innerHTML = menu() + '<div id="conteudo"><h2>Bem-vindo</h2></div>';
-}
-
-let busca = '';
-function abrirPesquisa() {
-  const m = document.createElement('div');
-  m.className = 'modal'; m.id = 'modalAlunos'; m.setAttribute('role', 'dialog');
-  m.innerHTML = `<div class="modal-content"><h3>Pesquisar Alunos</h3>
-    <div style="display:flex;justify-content:space-between">
-      <div><input id="busca" placeholder="Busca por Nome"> <button id="pesq">Pesquisar</button> <button id="todos">Todos</button></div>
-      <button id="adicionar"><i class="fa fa-plus"></i> Adicionar</button></div>
-    <div id="lista"></div></div>`;
-  document.body.appendChild(m);
-  busca = '';
+} else if (caminho.startsWith('/tedcorporativo/pesquisaalunos')) {
+  app.innerHTML = menu() + `<div id="conteudo">
+    <div class="topo"><span>Dashboard &gt; Treinamentos Institucionais GAP SSMA &gt; Pesquisar Alunos</span>
+      <div><button id="pesq"><i class="fa fa-refresh"></i> Pesquisar</button>
+      <button id="todos"><i class="fa fa-check"></i> Todos</button>
+      <button id="adicionar"><i class="fa fa-plus"></i> Adicionar</button></div></div>
+    <div class="panel"><h4>Filtros</h4>
+      <div class="row"><div class="col"><label>Superior Imediato</label><select><option>Nenhum superior imediato selecionado</option></select></div>
+      <div class="col"><label>Busca por Nome</label><input id="busca" placeholder="Digite nome a ser pesquisado"></div></div></div>
+    <div class="panel"><h4>Pesquisar Alunos</h4><div class="k-grid">
+      <div class="k-pager-info" id="contador"></div>
+      <div class="k-grid-header"><table><thead><tr><th></th><th>Colaborador</th><th>Lotação</th><th>Admissão</th></tr></thead></table></div>
+      <div class="k-grid-content"><table><tbody id="linhas"></tbody></table></div></div></div></div>`;
   document.getElementById('pesq').onclick = async () => {
     busca = document.getElementById('busca').value;
     carregando(true); await espera(500); carregando(false);
     lista();  // recria a lista: as marcações somem (o pior caso)
   };
-  document.getElementById('todos').onclick = () => { throw new Error('O app nunca deve clicar em Todos'); };
+  document.getElementById('todos').onclick = () => localStorage.setItem('erro', 'todos');
   document.getElementById('adicionar').onclick = adicionar;
   lista();
+} else {
+  app.innerHTML = menu() + '<div id="conteudo"><h2>Bem-vindo</h2></div>';
 }
+
+var busca = '';
 function lista() {
   const tam = +(localStorage.getItem('tamPagina') || 1000);
   const disponiveis = COLABORADORES.filter(c => !turmaAlunos().includes(c[0]))
     .filter(c => !busca || norm(c[0]).includes(norm(busca)));
   const pagina = disponiveis.slice(0, tam);
-  document.getElementById('lista').innerHTML = `<table><thead><tr><th><input type="checkbox" id="marcarTodos"></th>
-    <th>Nome</th><th>Cargo</th><th>E-mail</th><th>Lotação</th></tr></thead><tbody>
-    ${pagina.map(c => `<tr><td><input type="checkbox" value="${c[0]}"></td><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td>${c[3]}</td></tr>`).join('')}
-    </tbody></table><p>Exibindo itens ${pagina.length ? 1 : 0} - ${pagina.length} de ${disponiveis.length}</p>`;
+  document.getElementById('linhas').innerHTML = pagina.map(c => `<tr>
+      <td><input type="checkbox" class="k-checkbox" value="${c[0]}"></td>
+      <td><img alt=""><div><b>${c[0]}</b><br>${c[1]}<br>(13) 99999-0000<br>${c[2]}</div></td>
+      <td>GAP GESTAO AMBIENTAL E PROJETOS LTDA<br>${c[3]}</td><td>Admissão: 01/01/2025<br>Regime: CLT</td></tr>`).join('');
+  document.getElementById('contador').textContent = pagina.length
+    ? `Exibindo itens 1 - ${pagina.length} de ${disponiveis.length}` : 'Sem itens para exibir';
+}
+function modal(html) {
+  const m = document.createElement('div');
+  m.className = 'modal fade show'; m.style.display = 'block';
+  m.innerHTML = `<div class="modal-dialog"><div class="modal-content">${html}</div></div>`;
+  document.body.appendChild(m);
+  return m;
 }
 function adicionar() {
-  const marcados = [...document.querySelectorAll('#lista tbody input:checked')].map(c => c.value);
+  const marcados = [...document.querySelectorAll('#linhas input:checked')].map(c => c.value);
   if (!marcados.length) { toast('Selecione ao menos um aluno.', true); return; }
-  const c = document.createElement('div');
-  c.className = 'confirmacao';
-  c.innerHTML = `<div><p>Você confirma adicionar todos os alunos selecionados?</p>
-    <button id="cancelar">Cancelar</button> <button id="confirmar">Confirmar</button></div>`;
-  document.body.appendChild(c);
-  document.getElementById('cancelar').onclick = () => c.remove();
+  const c = modal(`<div class="modal-body"><p>Você confirma adicionar todos os alunos selecionados?</p></div>
+    <div class="modal-footer"><button id="confirmar">Confirmar</button> <button id="fecharConf">Fechar</button></div>`);
+  document.getElementById('fecharConf').onclick = () => c.remove();
   document.getElementById('confirmar').onclick = async () => {
     c.remove();
-    const p = document.createElement('div');
-    p.className = 'modal'; p.id = 'processando';
-    p.innerHTML = `<div class="modal-content" style="width:400px"><div class="modal-body"><h4>Aguarde, adicionando alunos</h4>
-      <p id="progresso">0 de ${marcados.length}</p></div></div>`;
-    document.body.appendChild(p);
+    const p = modal(`<div class="modal-header"><h5>Aguarde, adicionando alunos</h5></div>
+      <div class="modal-body"><div id="rotulo">Processando</div><div id="progresso">0 de ${marcados.length}</div></div>
+      <div class="modal-footer"><button id="fecharProc">Fechar</button></div>`);
     let ok = 0;
     for (const nome of marcados) {
       await espera(400);
@@ -179,9 +193,8 @@ function adicionar() {
       else { ok++; localStorage.setItem('turma2', JSON.stringify([...turmaAlunos(), nome])); toast(`${nome} adicionado!`); }
       document.getElementById('progresso').textContent = `${ok} de ${marcados.length}`;
     }
-    p.querySelector('.modal-body').innerHTML = `<h4>Processamento concluído</h4><p>Processamento concluído  ${ok} de ${marcados.length}</p>
-      <button id="ok">OK</button>`;
-    document.getElementById('ok').onclick = () => { p.remove(); document.getElementById('modalAlunos').remove(); location.reload(); };
+    document.getElementById('rotulo').textContent = 'Processamento concluído';
+    document.getElementById('fecharProc').onclick = () => { p.remove(); lista(); };
   };
 }
 </script>

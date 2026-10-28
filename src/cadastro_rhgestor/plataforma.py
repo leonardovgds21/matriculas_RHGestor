@@ -88,7 +88,15 @@ return null;
 _JS_POR_DATA = r"""
 const campo = arguments[0], ddmmaaaa = arguments[1];
 const [d, m, a] = ddmmaaaa.split('/');
-const valor = campo.type === 'date' ? `${a}-${m}-${d}` : ddmmaaaa;
+const $ = window.jQuery;
+const widget = $ && ($(campo).data('kendoDatePicker') || $(campo).data('kendoDateInput') || $(campo).data('datepicker'));
+if (widget && widget.value) {  // calendário do Kendo (o campo mostra dd-mm-aaaa)
+    widget.value(new Date(+a, +m - 1, +d));
+    if (widget.trigger) widget.trigger('change');
+    return campo.value;
+}
+const sep = (campo.value.match(/\d([\/.-])\d/) || [null, '/'])[1];
+const valor = campo.type === 'date' ? `${a}-${m}-${d}` : [d, m, a].join(sep);
 const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
 setter.call(campo, valor);
 for (const ev of ['input', 'change', 'blur']) campo.dispatchEvent(new Event(ev, {bubbles: true}));
@@ -133,7 +141,8 @@ const todos = [...document.querySelectorAll('body *')].filter(e => vis(e) && let
 const internos = todos.filter(e => !todos.some(o => o !== e && e.contains(o)));
 if (!internos.length) return null;
 const el = internos[0];
-const card = el.closest('a, [onclick], .card, .panel, .box, [class*=card], [class*=turma]') || el;
+// clica no título (o ícone ao lado dele duplica a turma)
+const card = el.closest('a, [onclick]') || el;
 return [card, internos.length];
 """
 
@@ -149,10 +158,11 @@ if (comTitulo) return comTitulo;
 if (!busca) return null;
 let el = busca;
 while (el && el !== document.body) {
-    if (el.querySelector('input[type=checkbox]') && letras(el.textContent).includes('adicionar')) return el;
+    if (el.querySelector('tbody input[type=checkbox], [role=row] input[type=checkbox]')) return el;
     el = el.parentElement;
 }
-return null;
+// lista vazia (ex.: depois de uma pesquisa sem resultado): a página continua sendo a de Pesquisar Alunos
+return /pesquisar alunos/.test(letras(document.body.innerText)) ? document.body : null;
 """
 
 # As linhas da lista de alunos: [nome, resto do texto, marcada]. A linha é a
@@ -252,6 +262,19 @@ const internos = l.filter(e => !l.some(o => o !== e && e.contains(o)));
 return internos.length ? internos[0].innerText.replace(/\s+/g, ' ').trim() : null;
 """
 
+# O texto da janela que diz "Processamento concluído" (com o contador "N de M").
+_JS_JANELA_PROCESSAMENTO = _JS_NORM + r"""
+const l = [...document.querySelectorAll('body *')].filter(e => vis(e) && /processamento conclu/.test(letras(e.textContent)));
+const internos = l.filter(e => !l.some(o => o !== e && e.contains(o)));
+if (!internos.length) return null;
+let el = internos[0];
+for (let i = 0; i < 4 && el.parentElement; i++) {
+    if (/\d+\s*de\s*\d+/.test(norm(el.innerText))) break;
+    el = el.parentElement;
+}
+return el.innerText;
+"""
+
 # Mensagens de "carregando" na frente da tela.
 _JS_CARREGANDO = _JS_NORM + r"""
 return [...document.querySelectorAll('.blockUI, .loading, .loader, .spinner, .spinner-border, .k-loading-mask, ' +
@@ -266,6 +289,8 @@ return a ? a.innerText.replace(/\s+/g, ' ').trim() : '';
 
 _RE_ADICIONADO = re.compile(r"^(?:aluno\(?a?\)?\s*:?\s*)?(.+?)\s+adicionad[oa]s?\b", re.I)
 _RE_PROCESSAMENTO = re.compile(r"processamento\s+conclu\w*\D*?(\d+)\s*de\s*(\d+)", re.I)
+_RE_CONCLUIDO = re.compile(r"processamento\s+conclu", re.I)
+_RE_BOTOES_NO_FIM = re.compile(r"(?:\s+(?:Confirmar|Fechar|Cancelar|OK|Ok|×))+\s*$")
 _RE_PROBLEMA = re.compile(r"erro|falh|n[aã]o\s|inv[aá]lid|j[aá]\s+(est[aá]|consta|existe|matricul|cadastr)|aten[cç][aã]o|aviso",
                           re.I)
 
@@ -547,8 +572,12 @@ class Plataforma:
         d = self.driver
         campo = d.execute_script(_JS_CAMPO_DO_ROTULO, "inicio da turma")
         if (campo.get_attribute("type") or "").lower() != "date":
-            self._digitar(campo, INICIO_DA_TURMA)
+            atual = campo.get_attribute("value") or ""
+            separador = "-" if re.search(r"\d-\d", atual) else "."if re.search(r"\d\.\d", atual) else "/"
+            self._digitar(campo, INICIO_DA_TURMA.replace("/", separador))
         valor = d.execute_script(_JS_POR_DATA, campo, INICIO_DA_TURMA)
+        if "1900" not in (valor or ""):
+            self.log(f"AVISO: o campo Início da turma ficou com \"{valor}\" em vez de 01/01/1900.")
         self.log(f"Início da turma: {INICIO_DA_TURMA} (campo ficou com {valor or 'vazio'}).")
         botao = d.execute_script(_JS_BOTAO_ATUALIZAR)
         if botao:
@@ -764,6 +793,7 @@ class Plataforma:
         d = self.driver
         mensagens: list[str] = list(vistas)
         processado = None
+        concluido = False
         fim = time.time() + 60 + 8 * quantos
         ultima_novidade = time.time()
         while time.time() < fim:
@@ -773,27 +803,42 @@ class Plataforma:
             except WebDriverException:
                 novas = []
             for texto in novas:
-                texto = " ".join(texto.split())
-                resto = texto
-                for m in sorted(mensagens, key=len, reverse=True):
-                    resto = resto.replace(m, " ")
-                if len(re.sub(r"[^A-Za-zÀ-ÿ]", "", resto)) < 3:  # "OK", "×" ou repetição do que já apareceu
-                    continue
-                if mensagens and any(m in texto for m in mensagens) and len(texto) > 120:
-                    continue  # bloco grande que só repete mensagens já mostradas
-                mensagens.append(texto)
-                ultima_novidade = time.time()
-                self.log(f"PLATAFORMA: {texto}")
+                texto = _sem_botoes(texto)
+                if self._mensagem_nova(texto, mensagens):
+                    mensagens.append(texto)
+                    ultima_novidade = time.time()
+                    self.log(f"PLATAFORMA: {texto}")
+                concluido = concluido or bool(_RE_CONCLUIDO.search(texto))
                 processado = processado or ler_processamento(texto)
-            if processado and time.time() - ultima_novidade > 1.5:
+            if concluido and not processado:
+                # "Processamento concluído" e o contador "N de M" ficam em partes separadas da janela
+                try:
+                    janela = _sem_botoes(d.execute_script(_JS_JANELA_PROCESSAMENTO) or "")
+                except WebDriverException:
+                    janela = ""
+                processado = ler_processamento(janela)
+                if processado and self._mensagem_nova(janela, mensagens):
+                    mensagens.append(janela)
+                    self.log(f"PLATAFORMA: {janela}")
+            if concluido and time.time() - ultima_novidade > 1.5:
                 break
-            if not processado and time.time() - ultima_novidade > 30:
+            if not concluido and time.time() - ultima_novidade > 30:
                 self.log("AVISO: a plataforma ficou 30 s sem mostrar mensagens e não disse \"Processamento concluído\".")
                 break
             time.sleep(0.25)
         else:
             self.log("AVISO: tempo esgotado esperando \"Processamento concluído\".")
         return mensagens, processado
+
+    @staticmethod
+    def _mensagem_nova(texto: str, mensagens: list[str]) -> bool:
+        if any(texto in m for m in mensagens):
+            return False
+        resto = texto
+        for m in sorted(mensagens, key=len, reverse=True):
+            resto = resto.replace(m, " ")
+        # "×", contador sozinho ("2 de 4") ou só repetição do que já apareceu
+        return len(re.sub(r"[^A-Za-zÀ-ÿ]", "", resto)) >= 3
 
     def _conferir_mensagens(self, lote: _Lote, mensagens: list[str], processado, aviso) -> None:
         adicionados = [n for n in (ler_mensagem_adicionado(m) for m in mensagens) if n]
@@ -808,7 +853,7 @@ class Plataforma:
             else:
                 aviso(pos, Resultado("sem_confirmacao", "não vi a mensagem \"adicionado!\"; confira na turma", nome))
         if processado:
-            self.log(f"Processamento concluído: {processado[0]} de {processado[1]}.")
+            self.log(f"PLATAFORMA: Processamento concluído {processado[0]} de {processado[1]}")
             if processado[0] < processado[1]:
                 self.log(f"AVISO: a plataforma adicionou {processado[0]} de {processado[1]}; veja as mensagens acima.")
 
@@ -834,6 +879,11 @@ class Plataforma:
         if self.url_turma and not self._botao("alunos", so_igual=True):
             d.get(self.url_turma)
             self._esperar_carregar()
+
+
+def _sem_botoes(texto: str) -> str:
+    """Tira os botões que vêm junto no texto das janelas ("... Confirmar Fechar")."""
+    return _RE_BOTOES_NO_FIM.sub("", " ".join((texto or "").split())).strip()
 
 
 def _letras(texto: str) -> str:
