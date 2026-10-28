@@ -37,6 +37,13 @@ Como usar
    - tem homônimos (duas pessoas com o mesmo nome: o app não marca);
    - deu erro ou não teve a mensagem "adicionado!".
    "Copiar pendências" copia essa lista para colar no Excel ou no e-mail.
+6. "Enviar e-mail aos colaboradores" (liberado depois de adicionar) abre
+   um e-mail novo no Outlook para quem foi adicionado, com o assunto
+   "treinamentos RH GESTOR - GAP" e o texto padrão dos Treinamentos
+   Institucionais GAP SSMA. O e-mail de cada um é o que a lista do RHGestor
+   mostra; se ela não mostrar, vale a mesma regra do FormaSeg:
+   nome.sobrenome@gapgestao.com.br. Confira e clique em Enviar no Outlook.
+   Se o texto não couber no link, ele é copiado: cole no corpo (Ctrl+V).
    Quando o app marca um nome parecido (ex.: com nome do meio a mais), ele
    avisa no registro para você conferir.
 

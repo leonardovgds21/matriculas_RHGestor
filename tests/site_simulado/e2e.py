@@ -73,6 +73,7 @@ Beatriz Lima 111.444.777-35""", confirmar=True)
     confere("adicionar", r, {
         "Joao Silva Pereira": "adicionado", "Marcos Paulo Souza": "homonimo", "Fulano Inexistente": "nao_encontrado",
         "Ana Paula Erro Teste": "erro", "Bruno Oliveira": "adicionado", "Beatriz Lima": "adicionado"})
+    confere("e-mail lido da lista de alunos", p.emails.get("JOÃO DA SILVA PEREIRA"), "joao@gap.com")
     confere("mensagens da plataforma no registro",
             [any(t.startswith("PLATAFORMA:") and frag in t for t in registro) for frag in (
                 "JOÃO DA SILVA PEREIRA adicionado!", "Erro ao adicionar ANA PAULA", "Processamento concluído",
