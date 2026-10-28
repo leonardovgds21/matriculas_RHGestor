@@ -30,6 +30,9 @@ Como usar
    adicionado sozinho.
    - "Modo teste" faz tudo, mas só marca: não clica em "+ Adicionar".
    - "Mostrar navegador" deixa ver o que está acontecendo.
+   - Se o RHGestor pedir a verificação de segurança ("Just a moment..." /
+     "Confirme que é humano"), o app abre o navegador na tela: clique na
+     caixinha, se ela aparecer, e o app continua sozinho.
 5. O registro embaixo mostra TODAS as mensagens da plataforma (em azul),
    como "NOME adicionado!" e "Processamento concluído N de M". No fim vem a
    lista "RESOLVER À MÃO" com quem:

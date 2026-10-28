@@ -279,6 +279,14 @@ for (let i = 0; i < 4 && el.parentElement; i++) {
 return el.innerText;
 """
 
+# A página de verificação de segurança do site (Cloudflare: "Just a moment...").
+_JS_VERIFICACAO = _JS_NORM + r"""
+const titulo = norm(document.title), texto = norm(document.body ? document.body.innerText : '').slice(0, 3000);
+return /just a moment|um momento|attention required/.test(titulo)
+    || /verify you are human|confirme que (voce )?e humano|verifique se (voce )?e humano|checking your browser|verificando (seu navegador|se a conexao)/.test(texto)
+    || !!document.querySelector('iframe[src*="challenges.cloudflare.com"], #challenge-form, #challenge-running, #cf-challenge-running');
+"""
+
 # Mensagens de "carregando" na frente da tela.
 _JS_CARREGANDO = _JS_NORM + r"""
 return [...document.querySelectorAll('.blockUI, .loading, .loader, .spinner, .spinner-border, .k-loading-mask, ' +
@@ -360,22 +368,35 @@ class Plataforma:
             self.driver.quit()
 
     def _abrir_navegador(self):
+        """Edge (ou Chrome) com um perfil próprio do app em dados/, para a
+        verificação de segurança do site, quando aparecer, valer nas próximas vezes."""
         erros = []
-        for nome, classe, opcoes in [
-            ("Edge", webdriver.Edge, webdriver.EdgeOptions()),
-            ("Chrome", webdriver.Chrome, webdriver.ChromeOptions()),
+        for nome, classe, criar_opcoes in [
+            ("Edge", webdriver.Edge, webdriver.EdgeOptions),
+            ("Chrome", webdriver.Chrome, webdriver.ChromeOptions),
         ]:
-            if not self.visivel:
-                opcoes.add_argument("--headless=new")
-            opcoes.add_argument("--window-size=1400,1000")
-            opcoes.add_argument("--lang=pt-BR")
-            try:
-                driver = classe(options=opcoes)
-                self.log(f"Navegador {nome} aberto{' (invisível)' if not self.visivel else ''}.")
-                return driver
-            except WebDriverException as erro:
-                erros.append(f"{nome}: {erro.msg}")
+            for com_perfil in (True, False):  # sem perfil se ele estiver em uso por outra janela
+                opcoes = criar_opcoes()
+                if not self.visivel:
+                    opcoes.add_argument("--headless=new")
+                opcoes.add_argument("--window-size=1400,1000")
+                opcoes.add_argument("--lang=pt-BR")
+                if com_perfil:
+                    opcoes.add_argument(f"--user-data-dir={pasta_dados() / ('navegador_' + nome.lower())}")
+                try:
+                    driver = classe(options=opcoes)
+                    self.log(f"Navegador {nome} aberto{' (invisível)' if not self.visivel else ''}.")
+                    return driver
+                except WebDriverException as erro:
+                    erros.append(f"{nome}{'' if com_perfil else ' sem perfil'}: {(erro.msg or '').splitlines()[0:1]}")
         raise ErroPlataforma("Não consegui abrir o Edge nem o Chrome.\n" + "\n".join(erros))
+
+    def _reabrir_visivel(self) -> None:
+        if self.driver:
+            self.driver.quit()
+        self.visivel = True
+        self.driver = self._abrir_navegador()
+        self.driver.set_page_load_timeout(120)
 
     def _esperar(self, condicao, tempo: int | None = None, o_que: str | None = None):
         """Espera a condição. Com `o_que`, um tempo esgotado vira um erro claro
@@ -495,13 +516,8 @@ class Plataforma:
     def login(self, usuario: str, senha: str) -> None:
         d = self.driver
         self.log("Entrando na plataforma...")
-        try:
-            d.get(f"{URL_BASE}/login")
-        except TimeoutException:
-            self.log("A página de login demorou para carregar; conferindo se o formulário apareceu...")
-        campo_senha = self._esperar(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, "input[type='password']")), 60,
-            "o campo Senha do login")
+        campo_senha = self._abrir_login()
+        d = self.driver
         campo_usuario = d.execute_script(_JS_CAMPO_DO_ROTULO, "login") or self._campo_texto_visivel()
         if not campo_usuario:
             raise self._erro("Não encontrei o campo Login.", "login")
@@ -527,6 +543,60 @@ class Plataforma:
             raise self._erro(f"Login recusado: {resultado[1]}", "login")
         self._esperar_carregar()
         self.log("Login feito.")
+
+    def _abrir_login(self):
+        """Abre o login e devolve o campo Senha. Se o site mostrar a verificação
+        de segurança ("Just a moment..." / "Confirme que é humano"), abre o
+        navegador visível para a pessoa fazer a verificação e espera."""
+        senha_visivel = EC.visibility_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
+
+        def carregar():
+            try:
+                self.driver.get(f"{URL_BASE}/login")
+            except TimeoutException:
+                self.log("A página de login demorou para carregar; conferindo se o formulário apareceu...")
+
+        def senha_ou_verificacao(drv):
+            try:
+                return senha_visivel(drv)
+            except StaleElementReferenceException:
+                return False
+            except WebDriverException:
+                pass
+            return False
+
+        carregar()
+        fim = time.time() + 60
+        while time.time() < fim:
+            campo = senha_ou_verificacao(self.driver)
+            if campo:
+                return campo
+            if self._verificacao_de_seguranca():
+                break
+            time.sleep(0.5)
+        else:
+            raise self._erro("Não encontrei o campo Senha do login (a página não carregou o formulário).",
+                             "o campo Senha do login")
+
+        if not self.visivel:
+            self.log("O RHGestor pediu a verificação de segurança do site. Vou abrir o navegador na tela: "
+                     "se aparecer \"Confirme que é humano\", clique na caixinha.")
+            self._reabrir_visivel()
+            carregar()
+        else:
+            self.log("O RHGestor pediu a verificação de segurança do site: se aparecer \"Confirme que é humano\" "
+                     "no navegador, clique na caixinha.")
+        try:
+            return self._esperar(senha_ou_verificacao_sem_desafio(senha_visivel), 240)
+        except TimeoutException:
+            raise self._erro("A verificação de segurança do site não terminou em 4 minutos.",
+                             "verificação de segurança no login") from None
+
+    def _verificacao_de_seguranca(self) -> bool:
+        try:
+            return bool(self.driver.execute_script(_JS_VERIFICACAO))
+        except WebDriverException:
+            return False
 
     def _campo_texto_visivel(self):
         for seletor in ("input[name*='login' i]", "input[id*='login' i]", "input[type='email']", "input[type='text']"):
@@ -887,6 +957,16 @@ class Plataforma:
         if self.url_turma and not self._botao("alunos", so_igual=True):
             d.get(self.url_turma)
             self._esperar_carregar()
+
+
+def senha_ou_verificacao_sem_desafio(senha_visivel):
+    """Condição de espera: o campo Senha visível (a verificação já passou)."""
+    def condicao(drv):
+        try:
+            return senha_visivel(drv)
+        except (StaleElementReferenceException, WebDriverException):
+            return False
+    return condicao
 
 
 def _sem_botoes(texto: str) -> str:

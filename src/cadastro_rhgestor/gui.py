@@ -164,6 +164,9 @@ class App(tk.Tk):
         for c in lidos:
             if c.avisos:
                 self.log.escrever(f"{c.origem}: {', '.join(c.avisos)} (confira e corrija na caixa de texto)")
+            if not c.cpf:  # sem CPF a leitura da página provavelmente falhou: o nome pode ter vindo embaralhado
+                self.log.escrever(f"AVISO: {c.origem}: não achei o CPF; o nome lido foi \"{c.nome}\". "
+                                  "Confira com a ficha e corrija na caixa de texto.")
         for p in problemas:
             self.log.escrever(f"AVISO: {p}")
         self.log.escrever(f"Fichas lidas: {len(novos)} colaborador(es) adicionado(s) à lista"
