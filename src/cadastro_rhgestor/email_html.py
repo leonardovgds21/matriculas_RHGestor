@@ -157,9 +157,11 @@ def _cf_html(fragmento: str) -> bytes:
             + inicio.encode() + corpo + fim.encode())
 
 
-def copiar_html(html_completo: str, texto: str) -> bool:
+def copiar_html(html_completo: str, texto: str, janela: int | None = None) -> bool:
     """Põe o e-mail na área de transferência como HTML (cola formatado no
-    Outlook) e como texto simples. Devolve False fora do Windows ou se falhar."""
+    Outlook) e como texto simples. `janela` é o HWND do app: com ele a área de
+    transferência tem dono (sem dono, o SetClipboardData pode falhar e o e-mail
+    sai em branco ao colar). Devolve False fora do Windows ou se falhar."""
     if sys.platform != "win32":
         return False
     import ctypes
@@ -189,7 +191,13 @@ def copiar_html(html_completo: str, texto: str) -> bool:
         kernel32.GlobalUnlock(memoria)
         return bool(user32.SetClipboardData(formato, memoria))
 
-    if not user32.OpenClipboard(None):
+    import time
+
+    for _ in range(10):  # outro programa pode estar com a área de transferência aberta
+        if user32.OpenClipboard(janela):
+            break
+        time.sleep(0.05)
+    else:
         return False
     try:
         user32.EmptyClipboard()

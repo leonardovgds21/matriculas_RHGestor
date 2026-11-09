@@ -385,7 +385,7 @@ class App(tk.Tk):
                                 "cole no campo Para (ou Cco) do e-mail que abriu.\n\n"
                                 "Clique OK depois de colar para copiar o texto da mensagem.")
         html_email = email_html.montar_html(email_html.logo_data_uri())
-        if email_html.copiar_html(html_email, email_alunos.CORPO):
+        if email_html.copiar_html(html_email, email_alunos.CORPO, int(self.wm_frame(), 16)):
             messagebox.showinfo("E-mail aos colaboradores",
                                 "O texto do e-mail (já formatado) foi copiado.\n\n"
                                 "Clique no corpo do e-mail que abriu e cole com Ctrl+V.")
