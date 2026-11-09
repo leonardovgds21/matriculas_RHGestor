@@ -16,6 +16,10 @@ Como usar
    (Ficha de Registro de Empregado, a mesma do FormaSeg e do Imbraep, ou
    fichas de EPI). O app lê só o CPF e o nome e põe na caixa de texto, onde
    dá para conferir e corrigir.
+   Ficha que o app não consegue ler (ex.: PDF mal formatado depois da
+   assinatura): clique em "Digitar dados da ficha..." e digite o nome
+   completo e o CPF. Dá para digitar várias seguidas; elas entram na lista
+   como se viessem da ficha.
 3. Clique em "Conferir lista". A coluna Situação mostra problemas como CPF
    inválido, nome incompleto ou repetido; essas linhas são puladas.
 4. Confira o nome da turma e clique em "Adicionar na turma". Informe o
