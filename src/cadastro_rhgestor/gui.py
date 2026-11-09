@@ -15,7 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import __version__, credenciais, email_alunos, email_html
 from .config import TURMA_PADRAO, pasta_dados
-from .entrada import Colaborador, ler_lista
+from .entrada import Colaborador, cpf_valido, formatar_cpf, ler_lista, so_numeros
 
 SITUACOES = {
     "adicionado": ("adicionado", "ok"),
@@ -79,6 +79,7 @@ class App(tk.Tk):
         botoes = ttk.Frame(self, padding=(8, 6))
         botoes.pack(fill="x")
         ttk.Button(botoes, text="Abrir fichas (PDF)...", command=self.abrir_fichas).pack(side="left")
+        ttk.Button(botoes, text="Digitar dados da ficha...", command=self.digitar_ficha).pack(side="left", padx=(6, 0))
         ttk.Button(botoes, text="Conferir lista", command=self.conferir).pack(side="left", padx=6)
         ttk.Button(botoes, text="Limpar", command=self.limpar).pack(side="left", padx=6)
         self.lbl_total = ttk.Label(botoes, text="")
@@ -175,6 +176,22 @@ class App(tk.Tk):
             self.conferir()
         elif problemas:
             messagebox.showwarning("Abrir fichas", "\n".join(problemas))
+
+    def digitar_ficha(self):
+        """Para ficha que não dá para ler (ex.: PDF mal formatado depois da
+        assinatura): digita o nome e o CPF, que entram na lista como se viessem da ficha."""
+        if self.enviando:
+            return
+        janela = DialogoFicha(self)
+        if not janela.adicionados:
+            return
+        atual = self.txt.get("1.0", "end").strip()
+        linhas = [f"{formatar_cpf(cpf)} {nome}".strip() for nome, cpf in janela.adicionados]
+        self.txt.delete("1.0", "end")
+        self.txt.insert("1.0", "\n".join(([atual] if atual else []) + linhas))
+        for nome, cpf in janela.adicionados:
+            self.log.escrever(f"Digitado à mão: {nome}" + (f" ({formatar_cpf(cpf)})" if cpf else " (sem CPF)"))
+        self.conferir()
 
     def limpar(self):
         if self.enviando:
@@ -385,6 +402,79 @@ class App(tk.Tk):
     def esquecer_login(self):
         credenciais.apagar()
         self.log.escrever("Login salvo apagado deste computador.")
+
+
+class DialogoFicha(tk.Toplevel):
+    """Digita o nome completo e o CPF de uma ficha que o app não conseguiu ler.
+    Dá para digitar várias seguidas ("Adicionar e digitar outra")."""
+
+    def __init__(self, pai: App):
+        super().__init__(pai)
+        self.title("Digitar dados da ficha")
+        self.resizable(False, False)
+        self.transient(pai)
+        self.adicionados: list[tuple[str, str]] = []
+        self.ja_na_lista = {c.cpf for c in ler_lista(pai.txt.get("1.0", "end")) if c.cpf}
+        self.nome = tk.StringVar()
+        self.cpf = tk.StringVar()
+
+        quadro = ttk.Frame(self, padding=12)
+        quadro.pack()
+        ttk.Label(quadro, text="Os mesmos dados que o app procura na ficha.").grid(row=0, column=0, sticky="w",
+                                                                                 pady=(0, 8))
+        ttk.Label(quadro, text="Nome completo").grid(row=1, column=0, sticky="w")
+        self.campo_nome = ttk.Entry(quadro, textvariable=self.nome, width=48)
+        self.campo_nome.grid(row=2, column=0, pady=(0, 8))
+        ttk.Label(quadro, text="CPF (pode deixar em branco: a busca na turma é pelo nome)").grid(
+            row=3, column=0, sticky="w")
+        ttk.Entry(quadro, textvariable=self.cpf, width=48).grid(row=4, column=0, pady=(0, 4))
+        self.aviso = ttk.Label(quadro, text="", foreground="#b91c1c")
+        self.aviso.grid(row=5, column=0, sticky="w")
+        self.contador = ttk.Label(quadro, text="")
+        self.contador.grid(row=6, column=0, sticky="w")
+        botoes = ttk.Frame(quadro)
+        botoes.grid(row=7, column=0, pady=(10, 0), sticky="e")
+        ttk.Button(botoes, text="Fechar", command=self.destroy).pack(side="right")
+        ttk.Button(botoes, text="Adicionar e fechar", command=self._adicionar_e_fechar).pack(side="right", padx=6)
+        ttk.Button(botoes, text="Adicionar e digitar outra", command=self._adicionar).pack(side="right")
+        self.bind("<Return>", lambda _: self._adicionar())
+        self.campo_nome.focus_set()
+        self.grab_set()
+        pai.wait_window(self)
+
+    def _validar(self) -> tuple[str, str] | None:
+        nome = " ".join(self.nome.get().split())
+        cpf = so_numeros(self.cpf.get())
+        if len(nome.split()) < 2:
+            self.aviso.config(text="Informe o nome completo.")
+            return None
+        if cpf and not cpf_valido(cpf):
+            self.aviso.config(text="CPF inválido: confira os números.")
+            return None
+        if cpf and cpf in self.ja_na_lista:
+            self.aviso.config(text="Esse CPF já está na lista.")
+            return None
+        return nome, cpf
+
+    def _adicionar(self) -> bool:
+        dados = self._validar()
+        if not dados:
+            return False
+        self.adicionados.append(dados)
+        if dados[1]:
+            self.ja_na_lista.add(dados[1])
+        self.aviso.config(text="")
+        self.contador.config(text=f"{len(self.adicionados)} adicionado(s). Último: {dados[0]}")
+        self.nome.set("")
+        self.cpf.set("")
+        self.campo_nome.focus_set()
+        return True
+
+    def _adicionar_e_fechar(self):
+        if not self.nome.get().strip() and not self.cpf.get().strip() and self.adicionados:
+            self.destroy()  # campos vazios depois de já ter adicionado: só fecha
+        elif self._adicionar():
+            self.destroy()
 
 
 class DialogoLogin(tk.Toplevel):
