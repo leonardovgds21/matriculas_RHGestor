@@ -13,8 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import __version__, credenciais, email_alunos
-from .config import TURMA_PADRAO
+from . import __version__, credenciais, email_alunos, email_html
+from .config import TURMA_PADRAO, pasta_dados
 from .entrada import Colaborador, ler_lista
 
 SITUACOES = {
@@ -334,8 +334,18 @@ class App(tk.Tk):
             self.log.escrever(f"E-mail de {nome}: {email}"
                               + (" (o que a lista do RHGestor mostra)" if origem == "plataforma" else " (regra nome.sobrenome)"))
         enderecos = [e for _, e, _ in lista]
-        link, com_dest, com_corpo = email_alunos.preparar_link(enderecos, email_alunos.ASSUNTO, email_alunos.CORPO)
         texto_dest = "; ".join(enderecos)
+        try:  # cópia do e-mail em dados/, para conferir no navegador se precisar
+            (pasta_dados() / "email_colaboradores.html").write_text(
+                email_html.montar_html(email_html.logo_data_uri()), encoding="utf-8")
+        except OSError:
+            pass
+        if email_html.abrir_no_outlook(enderecos, email_alunos.ASSUNTO):
+            self.log.escrever(f"E-mail formatado aberto no Outlook para: {texto_dest}. Confira e clique em Enviar.")
+            return
+        # Outlook novo (sem automação): o link abre o e-mail com destinatários e assunto, e o texto
+        # formatado vai para a área de transferência
+        link, com_dest, _ = email_alunos.preparar_link(enderecos, email_alunos.ASSUNTO, "")
         try:
             if sys.platform == "win32":
                 os.startfile(link)  # noqa: S606
@@ -357,13 +367,15 @@ class App(tk.Tk):
                                 "São muitos destinatários para caber no link. Os e-mails foram copiados:\n"
                                 "cole no campo Para (ou Cco) do e-mail que abriu.\n\n"
                                 "Clique OK depois de colar para copiar o texto da mensagem.")
-        if not com_corpo:
+        html_email = email_html.montar_html(email_html.logo_data_uri())
+        if email_html.copiar_html(html_email, email_alunos.CORPO):
+            messagebox.showinfo("E-mail aos colaboradores",
+                                "O texto do e-mail (já formatado) foi copiado.\n\n"
+                                "Clique no corpo do e-mail que abriu e cole com Ctrl+V.")
+        else:
             self._copiar(email_alunos.CORPO)
             messagebox.showinfo("E-mail aos colaboradores",
-                                "O texto da mensagem é grande demais para o link e foi copiado:\n"
-                                "cole no corpo do e-mail (Ctrl+V).")
-        else:
-            self._copiar(texto_dest)
+                                "O texto do e-mail foi copiado: cole no corpo do e-mail (Ctrl+V).")
 
     def _copiar(self, texto: str):
         self.clipboard_clear()

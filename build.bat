@@ -20,6 +20,8 @@ pyinstaller --noconfirm --clean --windowed ^
     --collect-all selenium ^
     --collect-submodules keyring ^
     --hidden-import keyring.backends.Windows ^
+    --hidden-import win32com.client ^
+    --add-data "assets;assets" ^
     main.py || goto :erro
 
 if exist executavel\CadastroRHGestor rmdir /s /q executavel\CadastroRHGestor
