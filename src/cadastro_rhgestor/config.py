@@ -25,6 +25,12 @@ def pasta_base() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def recurso(caminho: str) -> Path:
+    """Arquivo que vai junto no executável (ex.: assets/logo_gap.png)."""
+    base = Path(getattr(sys, "_MEIPASS", "")) if getattr(sys, "frozen", False) else pasta_base()
+    return base / caminho
+
+
 def pasta_dados() -> Path:
     pasta = pasta_base() / "dados"
     pasta.mkdir(exist_ok=True)

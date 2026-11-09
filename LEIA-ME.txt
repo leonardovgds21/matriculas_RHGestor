@@ -45,8 +45,13 @@ Como usar
    "treinamentos RH GESTOR - GAP" e o texto padrão dos Treinamentos
    Institucionais GAP SSMA. O e-mail de cada um é o que a lista do RHGestor
    mostra; se ela não mostrar, vale a mesma regra do FormaSeg:
-   nome.sobrenome@gapgestao.com.br. Confira e clique em Enviar no Outlook.
-   Se o texto não couber no link, ele é copiado: cole no corpo (Ctrl+V).
+   nome.sobrenome@gapgestao.com.br.
+   O e-mail vai no padrão visual da GAP (logo, destaque em verde, seções
+   numeradas). No Outlook clássico ele já abre formatado. No Outlook novo,
+   abre com destinatários e assunto e o texto formatado fica copiado:
+   clique no corpo e cole com Ctrl+V. Confira e clique em Enviar.
+   Para usar a logo da GAP, coloque o arquivo logo_gap.png na pasta
+   assets antes de gerar o executável.
    Quando o app marca um nome parecido (ex.: com nome do meio a mais), ele
    avisa no registro para você conferir.
 

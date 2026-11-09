@@ -1,5 +1,6 @@
 pdfplumber==0.11.4
 selenium==4.25.0
 keyring==25.4.1
+pywin32==308
 pyinstaller==6.10.0
 pytest==8.3.3
